@@ -306,13 +306,18 @@
         /**
          * Load and decode base 64 encoded sounds.
          */
-        loadSounds: function () {
+        loadSounds: function (done) {
             if (!IS_IOS) {
                 this.audioContext = new AudioContext();
 
                 var resourceTemplate =
                     document.getElementById(this.config.RESOURCE_TEMPLATE_ID).content;
 
+                var count = Object.keys(Runner.sounds).length;
+                function next () {
+                  count--
+                  if (count < 1 && typeof done === 'function') done()
+                }
                 for (var sound in Runner.sounds) {
                     var soundSrc =
                         resourceTemplate.getElementById(Runner.sounds[sound]).src;
@@ -322,6 +327,7 @@
                     // Async, so no guarantee of order in array.
                     this.audioContext.decodeAudioData(buffer, function (index, audioData) {
                         this.soundFx[index] = audioData;
+                        next()
                     }.bind(this, sound));
                 }
             }
@@ -668,7 +674,11 @@
                 if (!this.crashed && (Runner.keycodes.JUMP[e.keyCode] ||
                     e.type == Runner.events.TOUCHSTART)) {
                     if (!this.playing) {
-                        this.loadSounds();
+                        this.loadSounds(function () {
+                          this.playSound(this.soundFx.BUTTON_PRESS, function () {
+                            this.playSound(this.soundFx.SCORE);
+                          }.bind(this));
+                        }.bind(this));
                         this.playing = true;
                         this.update();
                         if (window.errorPageController) {
@@ -824,7 +834,9 @@
                 this.distanceMeter.reset(this.highestScore);
                 this.horizon.reset();
                 this.tRex.reset();
-                this.playSound(this.soundFx.BUTTON_PRESS);
+                this.playSound(this.soundFx.BUTTON_PRESS, function () {
+                  this.playSound(this.soundFx.SCORE);
+                }.bind(this));
                 this.invert(true);
                 this.update();
             }
@@ -847,12 +859,13 @@
          * Play a sound.
          * @param {SoundBuffer} soundBuffer
          */
-        playSound: function (soundBuffer) {
+        playSound: function (soundBuffer, end) {
             if (soundBuffer) {
                 var sourceNode = this.audioContext.createBufferSource();
                 sourceNode.buffer = soundBuffer;
                 sourceNode.connect(this.audioContext.destination);
                 sourceNode.start(0);
+                sourceNode.onended = end;
             }
         },
 
